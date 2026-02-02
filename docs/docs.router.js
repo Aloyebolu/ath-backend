@@ -9,159 +9,159 @@ const router = express.Router();
 
 // Configuration
 const CONFIG = {
-    DOCS_ROOT: path.resolve('docs'),
-    CACHE_TTL: 5 * 60 * 1000,
-    ALLOWED_EXTENSIONS: new Set(['.md', '.mdx']),
-    THEME: {
-        light: {
-            primary: '#3b82f6',
-            secondary: '#8b5cf6',
-            background: '#ffffff',
-            sidebar: '#f8fafc',
-            card: '#ffffff',
-            text: '#1e293b',
-            textSecondary: '#64748b',
-            border: '#e2e8f0',
-            accent: '#f59e0b'
-        },
-        dark: {
-            primary: '#60a5fa',
-            secondary: '#a78bfa',
-            background: '#0f172a',
-            sidebar: '#1e293b',
-            card: '#1e293b',
-            text: '#f1f5f9',
-            textSecondary: '#94a3b8',
-            border: '#334155',
-            accent: '#fbbf24'
-        }
+  DOCS_ROOT: path.resolve('docs'),
+  CACHE_TTL: 5 * 60 * 1000,
+  ALLOWED_EXTENSIONS: new Set(['.md', '.mdx']),
+  THEME: {
+    light: {
+      primary: '#3b82f6',
+      secondary: '#8b5cf6',
+      background: '#ffffff',
+      sidebar: '#f8fafc',
+      card: '#ffffff',
+      text: '#1e293b',
+      textSecondary: '#64748b',
+      border: '#e2e8f0',
+      accent: '#f59e0b'
+    },
+    dark: {
+      primary: '#60a5fa',
+      secondary: '#a78bfa',
+      background: '#0f172a',
+      sidebar: '#1e293b',
+      card: '#1e293b',
+      text: '#f1f5f9',
+      textSecondary: '#94a3b8',
+      border: '#334155',
+      accent: '#fbbf24'
     }
+  }
 };
 
 // Cache manager
 class CacheManager {
-    constructor() {
-        this.cache = new Map();
+  constructor() {
+    this.cache = new Map();
+  }
+
+  get(key) {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+
+    if (Date.now() - entry.timestamp > CONFIG.CACHE_TTL) {
+      this.cache.delete(key);
+      return null;
     }
 
-    get(key) {
-        const entry = this.cache.get(key);
-        if (!entry) return null;
+    return entry.data;
+  }
 
-        if (Date.now() - entry.timestamp > CONFIG.CACHE_TTL) {
-            this.cache.delete(key);
-            return null;
-        }
+  set(key, data) {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now()
+    });
+  }
 
-        return entry.data;
-    }
-
-    set(key, data) {
-        this.cache.set(key, {
-            data,
-            timestamp: Date.now()
-        });
-    }
-
-    clear() {
-        this.cache.clear();
-    }
+  clear() {
+    this.cache.clear();
+  }
 }
 
 const cache = new CacheManager();
 
 // Security utilities
 class Security {
-    static isValidPath(base, target) {
-        const resolved = path.resolve(base, target);
-        return resolved.startsWith(base + path.sep) || resolved === base;
-    }
+  static isValidPath(base, target) {
+    const resolved = path.resolve(base, target);
+    return resolved.startsWith(base + path.sep) || resolved === base;
+  }
 
-    static sanitizeFilename(filename) {
-        return filename.replace(/[^a-zA-Z0-9._-]/g, '');
-    }
+  static sanitizeFilename(filename) {
+    return filename.replace(/[^a-zA-Z0-9._-]/g, '');
+  }
 }
 
 // File system utilities
 class FileSystem {
-    static async readFileSafe(filepath) {
-        try {
-            return await fs.readFile(filepath, 'utf-8');
-        } catch {
-            return null;
-        }
+  static async readFileSafe(filepath) {
+    try {
+      return await fs.readFile(filepath, 'utf-8');
+    } catch {
+      return null;
     }
+  }
 
-    static async readYAMLFrontmatter(content) {
-        const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-        if (!match) return { meta: {}, content };
+  static async readYAMLFrontmatter(content) {
+    const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+    if (!match) return { meta: {}, content };
 
-        try {
-            const yamlContent = match[1];
-            const meta = {};
+    try {
+      const yamlContent = match[1];
+      const meta = {};
 
-            yamlContent.split('\n').forEach(line => {
-                const match = line.match(/^(\w+):\s*(.*)$/);
-                if (match) {
-                    const [, key, value] = match;
-                    if (value === 'true' || value === 'false') {
-                        meta[key] = value === 'true';
-                    } else if (!isNaN(value) && value.trim() !== '') {
-                        meta[key] = Number(value);
-                    } else {
-                        meta[key] = value;
-                    }
-                }
-            });
-
-            return { meta, content: match[2] };
-        } catch {
-            return { meta: {}, content: match[2] };
+      yamlContent.split('\n').forEach(line => {
+        const match = line.match(/^(\w+):\s*(.*)$/);
+        if (match) {
+          const [, key, value] = match;
+          if (value === 'true' || value === 'false') {
+            meta[key] = value === 'true';
+          } else if (!isNaN(value) && value.trim() !== '') {
+            meta[key] = Number(value);
+          } else {
+            meta[key] = value;
+          }
         }
-    }
+      });
 
-    static async getFileStats(filepath) {
-        try {
-            const stats = await fs.stat(filepath);
-            return {
-                exists: true,
-                isDirectory: stats.isDirectory(),
-                size: stats.size,
-                modified: stats.mtime
-            };
-        } catch {
-            return { exists: false };
-        }
+      return { meta, content: match[2] };
+    } catch {
+      return { meta: {}, content: match[2] };
     }
+  }
+
+  static async getFileStats(filepath) {
+    try {
+      const stats = await fs.stat(filepath);
+      return {
+        exists: true,
+        isDirectory: stats.isDirectory(),
+        size: stats.size,
+        modified: stats.mtime
+      };
+    } catch {
+      return { exists: false };
+    }
+  }
 }
 
 // Document processor
 class DocumentProcessor {
-    constructor() {
-        this.setupRenderer();
-    }
+  constructor() {
+    this.setupRenderer();
+  }
 
-    setupRenderer() {
-        const renderer = new marked.Renderer();
-        renderError.heading = (tokens, depth) => {
-            const text = tokens.text;
-            const slugger = new marked.Slugger();
-            const id = slugger.slug(text);
-            return `
+  setupRenderer() {
+    const renderer = new marked.Renderer();
+    renderError.heading = (tokens, depth) => {
+      const text = tokens.text;
+      const slugger = new marked.Slugger();
+      const id = slugger.slug(text);
+      return `
         <h${depth} id="${id}" class="heading-link">
             <a href="#${id}" class="heading-anchor">#</a>
             ${text}
         </h${depth}>
       `;
-        };
+    };
 
-        // Fixed code renderer
-        renderer.code = ({ text, lang, isEscaped }) => {
-            const validLang = lang || 'text';
-            // Handle the code parameter - it should be a string
-            const codeString = typeof text === 'string' ? text : String(text);
-            const encoded = Buffer.from(codeString).toString('base64');
-            return `
+    // Fixed code renderer
+    renderer.code = ({ text, lang, isEscaped }) => {
+      const validLang = lang || 'text';
+      // Handle the code parameter - it should be a string
+      const codeString = typeof text === 'string' ? text : String(text);
+      const encoded = Buffer.from(codeString).toString('base64');
+      return `
         <div class="code-block">
           <div class="code-header">
             <span class="language">${validLang}</span>
@@ -172,22 +172,21 @@ class DocumentProcessor {
           <pre><code class="language-${validLang}">${codeString}</code></pre>
         </div>
       `;
-        };
+    };
 
-        // Custom horizontal rule
-        renderer.hr = () => {
-            return `<hr class="custom-hr"/>`;
-        };
-        // Custom blockquote
-        renderer.blockquote = ({tokens}) => {
-            console.log(tokens)
-            const content = tokens.map(token => token.text).join('');
-            return `<blockquote class="custom-blockquote">${marked.parse(content)}</blockquote>`;
-        };
+    // Custom horizontal rule
+    renderer.hr = () => {
+      return `<hr class="custom-hr"/>`;
+    };
+    // Custom blockquote
+    renderer.blockquote = ({ tokens }) => {
+      const content = tokens.map(token => token.text).join('');
+      return `<blockquote class="custom-blockquote">${marked.parse(content)}</blockquote>`;
+    };
 
-        // Custom table
-        renderer.table = ({ header, rows, align }) => {
-            return `
+    // Custom table
+    renderer.table = ({ header, rows, align }) => {
+      return `
         <div class="table-container">
           <table class="docs-table">
             <thead>
@@ -213,265 +212,311 @@ class DocumentProcessor {
           </table>
         </div>
             `;
-        };
-        // Custom link
-        renderer.link = (href, title, text) => {
-            const isExternal = href.startsWith('http');
-            const target = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
-            const externalIcon = isExternal ? ' <i class="fas fa-external-link-alt external-icon"></i>' : '';
-            return `<a href="${href}"${target} class="docs-link">${text}${externalIcon}</a>`;
-        };
+    };
+    // Custom link
+    renderer.link = (href, title, text) => {
+      const isExternal = href.startsWith('http');
+      const target = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
+      const externalIcon = isExternal ? ' <i class="fas fa-external-link-alt external-icon"></i>' : '';
+      return `<a href="${href}"${target} class="docs-link">${text}${externalIcon}</a>`;
+    };
 
-        marked.setOptions({
-            renderer,
-            gfm: true,
-            breaks: true,
-            pedantic: false,
-            smartLists: true,
-            smartypants: true
-        });
-    }
+    marked.setOptions({
+      renderer,
+      gfm: true,
+      breaks: true,
+      pedantic: false,
+      smartLists: true,
+      smartypants: true
+    });
+  }
 
-    async processMarkdown(content) {
-        const { meta, content: markdownContent } = await FileSystem.readYAMLFrontmatter(content);
+  async processMarkdown(content) {
+    const { meta, content: markdownContent } = await FileSystem.readYAMLFrontmatter(content);
 
-        const html = marked.parse(markdownContent);
+    const html = marked.parse(markdownContent);
 
-        return {
-            html,
-            meta
-        };
-    }
+    return {
+      html,
+      meta
+    };
+  }
 }
 
 
 // Sidebar builder
 class SidebarBuilder {
-    async buildTree(dir, basePath = '') {
-        const cacheKey = `sidebar:${dir}:${basePath}`;
-        const cached = cache.get(cacheKey);
-        if (cached) return cached;
+  async buildTree(dir, basePath = '') {
+    const cacheKey = `sidebar:${dir}:${basePath}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return cached;
 
-        try {
-            const files = await fs.readdir(dir);
-            const items = [];
+    try {
+      const files = await fs.readdir(dir);
+      const items = [];
 
-            for (const name of files) {
-                if (name.startsWith('.')) continue;
+      for (const name of files) {
+        if (name.startsWith('.')) continue;
 
-                const fullPath = path.join(dir, name);
-                const relativePath = path.join(basePath, name);
-                const stats = await FileSystem.getFileStats(fullPath);
+        const fullPath = path.join(dir, name);
+        const relativePath = path.join(basePath, name);
+        const stats = await FileSystem.getFileStats(fullPath);
 
-                if (!stats.exists) continue;
+        if (!stats.exists) continue;
 
-                const isDir = stats.isDirectory;
-                let meta = {};
-                let order = items.length;
+        const isDir = stats.isDirectory;
+        let meta = {};
+        let order = items.length;
 
-                if (!isDir && CONFIG.ALLOWED_EXTENSIONS.has(path.extname(name))) {
-                    const content = await FileSystem.readFileSafe(fullPath);
-                    if (content) {
-                        const result = await FileSystem.readYAMLFrontmatter(content);
-                        meta = result.meta;
-                        order = result.meta?.order || order;
-                    }
-                }
-
-                const item = {
-                    id: Buffer.from(relativePath).toString('base64'),
-                    name: path.basename(name, path.extname(name)),
-                    type: isDir ? 'dir' : 'file',
-                    path: relativePath,
-                    order,
-                    meta
-                };
-
-                if (isDir) {
-                    item.children = await this.buildTree(fullPath, relativePath);
-                }
-
-                items.push(item);
-            }
-
-            items.sort((a, b) => {
-                if (a.order !== b.order) return (a.order || 0) - (b.order || 0);
-                return a.name.localeCompare(b.name);
-            });
-
-            cache.set(cacheKey, items);
-            return items;
-        } catch (error) {
-            console.error('Error building sidebar:', error);
-            return [];
+        if (!isDir && CONFIG.ALLOWED_EXTENSIONS.has(path.extname(name))) {
+          const content = await FileSystem.readFileSafe(fullPath);
+          if (content) {
+            const result = await FileSystem.readYAMLFrontmatter(content);
+            meta = result.meta;
+            order = result.meta?.order || order;
+          }
         }
+
+        const item = {
+          id: Buffer.from(relativePath).toString('base64'),
+          name: path.basename(name, path.extname(name)),
+          type: isDir ? 'dir' : 'file',
+          path: relativePath,
+          order,
+          meta
+        };
+
+        if (isDir) {
+          item.children = await this.buildTree(fullPath, relativePath);
+        }
+
+        items.push(item);
+      }
+
+      items.sort((a, b) => {
+        if (a.order !== b.order) return (a.order || 0) - (b.order || 0);
+        return a.name.localeCompare(b.name);
+      });
+
+      cache.set(cacheKey, items);
+      return items;
+    } catch (error) {
+      console.error('Error building sidebar:', error);
+      return [];
     }
+  }
 
-    renderSidebar(items, currentPath, depth = 0) {
-        if (!items.length) return '';
+  renderSidebar(items, currentPath, depth = 0) {
+    if (!items.length) return '';
+function isExcludedFile(fileName) {
+  if (!fileName) return true;
+  
+  // hide dotfiles
+  if (fileName.startsWith('.')) return true;
 
-        return `
-      <ul class="sidebar-list depth-${depth}">
-        ${items.map(item => {
-            const isActive = item.path === currentPath;
-            const hasChildren = item.children && item.children.length > 0;
-            const displayName = item.meta?.title || item.name;
+  // blocked extensions
+  const blockedExt = new Set(['.env', '.log', '.map', '.bak', '.js']);
+  if (blockedExt.has(path.extname(fileName))) return true;
 
-            let html = '';
-            if (item.type === 'dir') {
-                const icon = item.meta?.icon || '📁';
-                html = `
-              <li class="sidebar-item dir ${isActive ? 'active' : ''}">
-                <details ${depth === 0 ? 'open' : ''}>
-                  <summary>
-                    <span class="icon">${icon}</span>
-                    <span class="name">${displayName}</span>
-                    ${item.meta?.count ? `<span class="count">${item.meta.count}</span>` : ''}
-                  </summary>
-                  ${hasChildren ? this.renderSidebar(item.children, currentPath, depth + 1) : ''}
-                </details>
-              </li>
-            `;
-            } else {
-                const icon = item.meta?.icon || '📄';
-                html = `
-              <li class="sidebar-item file ${isActive ? 'active' : ''}">
-                <a href="/docs/${item.path.replace(/\.md$/, '')}" 
-                   class="sidebar-link ${isActive ? 'active' : ''}"
-                   data-path="${item.path}"
-                   data-title="${displayName}">
+  // private folders
+  const blockedFolders = ['_private', '.git', 'node_modules', '.cache'];
+  if (blockedFolders.includes(fileName)) return true;
+
+  return false;
+}
+
+
+return `
+  <ul class="sidebar-list depth-${depth}">
+    ${items
+      .filter(item => !isExcludedFile(item.name))
+      .map(item => {
+        const isActive = item.path === currentPath;
+        const hasChildren = item.children && item.children.length > 0;
+        const displayName = item.meta?.title || item.name;
+
+        let html = '';
+        if (item.type === 'dir') {
+          const icon = item.meta?.icon || '📁';
+          html = `
+            <li class="sidebar-item dir ${isActive ? 'active' : ''}">
+              <details ${depth === 0 ? 'open' : ''}>
+                <summary>
                   <span class="icon">${icon}</span>
                   <span class="name">${displayName}</span>
-                  ${item.meta?.status ? `<span class="badge ${item.meta.status}">${item.meta.status}</span>` : ''}
-                </a>
-              </li>
-            `;
-            }
-            return html;
-        }).join('')}
-      </ul>
-    `;
-    }
+                  ${item.meta?.count ? `<span class="count">${item.meta.count}</span>` : ''}
+                </summary>
+                ${hasChildren ? this.renderSidebar(item.children, currentPath, depth + 1) : ''}
+              </details>
+            </li>
+          `;
+        } else {
+          const icon = item.meta?.icon || '📄';
+          html = `
+            <li class="sidebar-item file ${isActive ? 'active' : ''}">
+              <a href="/docs/${item.path.replace(/\.md$/, '')}" 
+                 class="sidebar-link ${isActive ? 'active' : ''}"
+                 data-path="${item.path}"
+                 data-title="${displayName}">
+                <span class="icon">${icon}</span>
+                <span class="name">${displayName}</span>
+                ${item.meta?.status ? `<span class="badge ${item.meta.status}">${item.meta.status}</span>` : ''}
+              </a>
+            </li>
+          `;
+        }
+
+        return html;
+      }).join('')}
+  </ul>
+`;
+
+
+  }
 }
 
 // Main renderer
 class PageRenderer {
-    constructor() {
-        this.sidebarBuilder = new SidebarBuilder();
-        this.docProcessor = new DocumentProcessor();
+  constructor() {
+    this.sidebarBuilder = new SidebarBuilder();
+    this.docProcessor = new DocumentProcessor();
+  }
+
+  async renderPage(requestedPath, resolvedPath, isDir, isPartial = false) {
+    if (isPartial) {
+      return await this.renderPartialContent(requestedPath, resolvedPath, isDir);
     }
 
-    async renderPage(requestedPath, resolvedPath, isDir, isPartial = false) {
-        if (isPartial) {
-            return await this.renderPartialContent(requestedPath, resolvedPath, isDir);
-        }
+    const cacheKey = `page:${requestedPath}:${isDir}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return cached;
 
-        const cacheKey = `page:${requestedPath}:${isDir}`;
-        const cached = cache.get(cacheKey);
-        if (cached) return cached;
+    const sidebarItems = await this.sidebarBuilder.buildTree(CONFIG.DOCS_ROOT);
+    const sidebarHTML = this.sidebarBuilder.renderSidebar(sidebarItems, requestedPath);
 
-        const sidebarItems = await this.sidebarBuilder.buildTree(CONFIG.DOCS_ROOT);
-        const sidebarHTML = this.sidebarBuilder.renderSidebar(sidebarItems, requestedPath);
+    let contentHTML = '';
+    let title = 'Bride Gap API Docs';
+    let meta = {};
 
-        let contentHTML = '';
-        let title = 'Bride Gap API Docs';
-        let meta = {};
+    if (isDir) {
+      const indexFile = path.join(resolvedPath, 'index.md');
+      const indexContent = await FileSystem.readFileSafe(indexFile);
 
-        if (isDir) {
-            const indexFile = path.join(resolvedPath, 'index.md');
-            const indexContent = await FileSystem.readFileSafe(indexFile);
-
-            if (indexContent) {
-                const processed = await this.docProcessor.processMarkdown(indexContent);
-                contentHTML = processed.html;
-                meta = processed.meta;
-                title = meta.title || path.basename(requestedPath) || 'Documentation';
-            } else {
-                const files = await fs.readdir(resolvedPath);
-                contentHTML = this.renderDirectoryView(requestedPath, files);
-                title = requestedPath || 'Documentation';
-            }
-        } else {
-            const fileContent = await FileSystem.readFileSafe(resolvedPath);
-            if (fileContent) {
-                const processed = await this.docProcessor.processMarkdown(fileContent);
-                contentHTML = processed.html;
-                meta = processed.meta;
-                title = meta.title || path.basename(requestedPath, path.extname(requestedPath));
-            }
-        }
-
-        const page = this.generateFullPage(title, sidebarHTML, contentHTML, meta);
-        cache.set(cacheKey, page);
-        return page;
+      if (indexContent) {
+        const processed = await this.docProcessor.processMarkdown(indexContent);
+        contentHTML = processed.html;
+        meta = processed.meta;
+        title = meta.title || path.basename(requestedPath) || 'Documentation';
+      } else {
+        const files = await fs.readdir(resolvedPath);
+        contentHTML = this.renderDirectoryView(requestedPath, files);
+        title = requestedPath || 'Documentation';
+      }
+    } else {
+      const fileContent = await FileSystem.readFileSafe(resolvedPath);
+      if (fileContent) {
+        const processed = await this.docProcessor.processMarkdown(fileContent);
+        contentHTML = processed.html;
+        meta = processed.meta;
+        title = meta.title || path.basename(requestedPath, path.extname(requestedPath));
+      }
     }
 
-    async renderPartialContent(requestedPath, resolvedPath, isDir) {
-        let contentHTML = '';
-        let title = 'Bride Gap API Docs';
-        let meta = {};
+    const page = this.generateFullPage(title, sidebarHTML, contentHTML, meta);
+    cache.set(cacheKey, page);
+    return page;
+  }
 
-        if (isDir) {
-            const indexFile = path.join(resolvedPath, 'index.md');
-            const indexContent = await FileSystem.readFileSafe(indexFile);
+  async renderPartialContent(requestedPath, resolvedPath, isDir) {
+    let contentHTML = '';
+    let title = 'Bride Gap API Docs';
+    let meta = {};
 
-            if (indexContent) {
-                const processed = await this.docProcessor.processMarkdown(indexContent);
-                contentHTML = processed.html;
-                meta = processed.meta;
-                title = meta.title || path.basename(requestedPath) || 'Documentation';
-            } else {
-                const files = await fs.readdir(resolvedPath);
-                contentHTML = this.renderDirectoryView(requestedPath, files);
-                title = requestedPath || 'Documentation';
-            }
-        } else {
-            const fileContent = await FileSystem.readFileSafe(resolvedPath);
-            if (fileContent) {
-                const processed = await this.docProcessor.processMarkdown(fileContent);
-                contentHTML = processed.html;
-                meta = processed.meta;
-                title = meta.title || path.basename(requestedPath, path.extname(requestedPath));
-            }
-        }
+    if (isDir) {
+      const indexFile = path.join(resolvedPath, 'index.md');
+      const indexContent = await FileSystem.readFileSafe(indexFile);
 
-        return JSON.stringify({
-            title,
-            content: contentHTML,
-            meta,
-            requestedPath,
-            isDir
-        });
+      if (indexContent) {
+        const processed = await this.docProcessor.processMarkdown(indexContent);
+        contentHTML = processed.html;
+        meta = processed.meta;
+        title = meta.title || path.basename(requestedPath) || 'Documentation';
+      } else {
+        const files = await fs.readdir(resolvedPath);
+        contentHTML = this.renderDirectoryView(requestedPath, files);
+        title = requestedPath || 'Documentation';
+      }
+    } else {
+      const fileContent = await FileSystem.readFileSafe(resolvedPath);
+      if (fileContent) {
+        const processed = await this.docProcessor.processMarkdown(fileContent);
+        contentHTML = processed.html;
+        meta = processed.meta;
+        title = meta.title || path.basename(requestedPath, path.extname(requestedPath));
+      }
     }
 
-    renderDirectoryView(dirPath, files) {
-        return `
-      <div class="directory-view">
-        <h1><i class="fas fa-folder-open"></i> ${dirPath || 'Root Directory'}</h1>
-        <p class="directory-description">Browse through the documentation files</p>
-        <div class="file-grid">
-          ${files.map(file => {
-            const ext = path.extname(file);
-            const isMarkdown = CONFIG.ALLOWED_EXTENSIONS.has(ext);
-            const icon = isMarkdown ? '<i class="fas fa-file-alt"></i>' : '<i class="fas fa-folder"></i>';
-            const typeClass = isMarkdown ? 'file' : 'folder';
-            return `
-              <a href="/docs/${path.join(dirPath, file)}" class="file-item ${typeClass}">
-                <div class="file-icon">${icon}</div>
-                <div class="file-info">
-                  <div class="file-name">${file}</div>
-                  <div class="file-type">${isMarkdown ? 'Markdown Document' : 'Folder'}</div>
-                </div>
-              </a>
-            `;
-        }).join('')}
-        </div>
+    return JSON.stringify({
+      title,
+      content: contentHTML,
+      meta,
+      requestedPath,
+      isDir
+    });
+  }
+
+  renderDirectoryView(dirPath, files) {
+    const visibleFiles = files.filter(file => !this.isExcludedFile(file));
+
+    return `
+    <div class="directory-view">
+      <h1><i class="fas fa-folder-open"></i> ${dirPath || 'Root Directory'}</h1>
+      <p class="directory-description">Browse through the documentation files</p>
+      <div class="file-grid">
+        ${visibleFiles.map(file => {
+      const ext = path.extname(file);
+      const isMarkdown = CONFIG.ALLOWED_EXTENSIONS.has(ext);
+      const icon = isMarkdown
+        ? '<i class="fas fa-file-alt"></i>'
+        : '<i class="fas fa-folder"></i>';
+
+      const typeClass = isMarkdown ? 'file' : 'folder';
+
+      return `
+            <a href="/docs/${path.join(dirPath, file)}" class="file-item ${typeClass}">
+              <div class="file-icon">${icon}</div>
+              <div class="file-info">
+                <div class="file-name">${file}</div>
+                <div class="file-type">${isMarkdown ? 'Markdown Document' : 'Folder'}</div>
+              </div>
+            </a>
+          `;
+    }).join('')}
       </div>
-    `;
-    }
+    </div>
+  `;
+  }
 
-    generateFullPage(title, sidebar, content, meta) {
-        return `
+  isExcludedFile(fileName) {
+    if (!fileName) return true;
+
+    // hide dotfiles
+    if (fileName.startsWith('.')) return true;
+
+    console.log(fileName)
+    // blocked extensions
+    const blockedExt = new Set(['.env', '.log', '.map', '.bak', '.js']);
+    if (blockedExt.has(path.extname(fileName))) return true;
+
+    // private folders
+    const blockedFolders = ['_private', '.git', 'node_modules', '.cache'];
+    if (blockedFolders.includes(fileName)) return true;
+
+    return false;
+  }
+
+  generateFullPage(title, sidebar, content, meta) {
+    return `
       <!DOCTYPE html>
       <html lang="en" class="light-theme">
       <head>
@@ -1538,97 +1583,97 @@ class PageRenderer {
       </body>
       </html>
     `;
-    }
+  }
 
-    renderBreadcrumb(paths) {
-        const items = paths.map((path, index) => {
-            if (index === paths.length - 1) {
-                return `<span class="breadcrumb-current">${path.name}</span>`;
-            }
-            return `<a href="${path.url}">${path.name}</a>`;
-        }).join('<span class="breadcrumb-separator">/</span>');
+  renderBreadcrumb(paths) {
+    const items = paths.map((path, index) => {
+      if (index === paths.length - 1) {
+        return `<span class="breadcrumb-current">${path.name}</span>`;
+      }
+      return `<a href="${path.url}">${path.name}</a>`;
+    }).join('<span class="breadcrumb-separator">/</span>');
 
-        return `<nav class="breadcrumb">${items}</nav>`;
-    }
+    return `<nav class="breadcrumb">${items}</nav>`;
+  }
 }
 
 // Main route handler
 const pageRenderer = new PageRenderer();
 
 router.get(/^\/(.*)$/, async (req, res) => {
-    try {
-        // Check if it's a content API request
-        if (req.path === '/api/content' && req.get('X-Requested-With') === 'XMLHttpRequest') {
-            const requestedPath = req.query.path || '';
-            
-            if (!Security.isValidPath(CONFIG.DOCS_ROOT, requestedPath)) {
-                return res.status(403).json({ error: 'Access Denied' });
-            }
+  try {
+    // Check if it's a content API request
+    if (req.path === '/api/content' && req.get('X-Requested-With') === 'XMLHttpRequest') {
+      const requestedPath = req.query.path || '';
 
-            const resolvedPath = path.resolve(CONFIG.DOCS_ROOT, requestedPath);
-            const stats = await FileSystem.getFileStats(resolvedPath);
+      if (!Security.isValidPath(CONFIG.DOCS_ROOT, requestedPath)) {
+        return res.status(403).json({ error: 'Access Denied' });
+      }
 
-            if (!stats.exists) {
-                // Try appending .md extension
-                const mdPath = resolvedPath + '.md';
-                const mdStats = await FileSystem.getFileStats(mdPath);
-                if (mdStats.exists && !mdStats.isDirectory) {
-                    const content = await pageRenderer.renderPartialContent(requestedPath + '.md', mdPath, false);
-                    return res.send(content);
-                }
-                return res.status(404).json({ error: 'Document not found' });
-            }
+      const resolvedPath = path.resolve(CONFIG.DOCS_ROOT, requestedPath);
+      const stats = await FileSystem.getFileStats(resolvedPath);
 
-            const isDir = stats.isDirectory;
-            const content = await pageRenderer.renderPartialContent(requestedPath, resolvedPath, isDir);
-            return res.send(content);
+      if (!stats.exists) {
+        // Try appending .md extension
+        const mdPath = resolvedPath + '.md';
+        const mdStats = await FileSystem.getFileStats(mdPath);
+        if (mdStats.exists && !mdStats.isDirectory) {
+          const content = await pageRenderer.renderPartialContent(requestedPath + '.md', mdPath, false);
+          return res.send(content);
         }
+        return res.status(404).json({ error: 'Document not found' });
+      }
 
-        // Regular page request
-        let requestedPath = (req.params[0] || '').replace(/^\/+/, '');
-
-        if (!Security.isValidPath(CONFIG.DOCS_ROOT, requestedPath)) {
-            return res.status(403).send(renderError('Access Denied', 'Invalid path requested.', 403));
-        }
-
-        const resolvedPath = path.resolve(CONFIG.DOCS_ROOT, requestedPath);
-        const stats = await FileSystem.getFileStats(resolvedPath);
-
-        if (!stats.exists) {
-            // Try appending .md extension
-            const mdPath = resolvedPath + '.md';
-            const mdStats = await FileSystem.getFileStats(mdPath);
-            if (mdStats.exists && !mdStats.isDirectory) {
-                const page = await pageRenderer.renderPage(requestedPath + '.md', mdPath, false);
-                return res.send(page);
-            }
-            // return res.status(404).send(renderError('404 - Not Found', `Document not found: ${requestedPath}`, 404));
-        }
-
-        if (stats.isDirectory) {
-            const page = await pageRenderer.renderPage(requestedPath, resolvedPath, true);
-            return res.send(page);
-        }
-
-        if (!CONFIG.ALLOWED_EXTENSIONS.has(path.extname(requestedPath))) {
-            return res.status(400).send(renderError('Bad Request', 'Only markdown files are allowed.', 400));
-        }
-
-        const page = await pageRenderer.renderPage(requestedPath, resolvedPath, false);
-        return res.send(page);
-
-    } catch (error) {
-        console.error('Error serving docs:', error);
-        // return res.status(500).send(renderError('500 - Server Error', error.message, 500));
+      const isDir = stats.isDirectory;
+      const content = await pageRenderer.renderPartialContent(requestedPath, resolvedPath, isDir);
+      return res.send(content);
     }
+
+    // Regular page request
+    let requestedPath = (req.params[0] || '').replace(/^\/+/, '');
+
+    if (!Security.isValidPath(CONFIG.DOCS_ROOT, requestedPath)) {
+      return res.status(403).send(renderError('Access Denied', 'Invalid path requested.', 403));
+    }
+
+    const resolvedPath = path.resolve(CONFIG.DOCS_ROOT, requestedPath);
+    const stats = await FileSystem.getFileStats(resolvedPath);
+
+    if (!stats.exists) {
+      // Try appending .md extension
+      const mdPath = resolvedPath + '.md';
+      const mdStats = await FileSystem.getFileStats(mdPath);
+      if (mdStats.exists && !mdStats.isDirectory) {
+        const page = await pageRenderer.renderPage(requestedPath + '.md', mdPath, false);
+        return res.send(page);
+      }
+      // return res.status(404).send(renderError('404 - Not Found', `Document not found: ${requestedPath}`, 404));
+    }
+
+    if (stats.isDirectory) {
+      const page = await pageRenderer.renderPage(requestedPath, resolvedPath, true);
+      return res.send(page);
+    }
+
+    if (!CONFIG.ALLOWED_EXTENSIONS.has(path.extname(requestedPath))) {
+      return res.status(400).send(renderError('Bad Request', 'Only markdown files are allowed.', 400));
+    }
+
+    const page = await pageRenderer.renderPage(requestedPath, resolvedPath, false);
+    return res.send(page);
+
+  } catch (error) {
+    console.error('Error serving docs:', error);
+    // return res.status(500).send(renderError('500 - Server Error', error.message, 500));
+  }
 });
 
 // Helper function to render error pages
 function renderError(title, message, code) {
-    const isDark = Math.random() > 0.5; // Simple fallback
-    const theme = isDark ? CONFIG.THEME.dark : CONFIG.THEME.light;
+  const isDark = Math.random() > 0.5; // Simple fallback
+  const theme = isDark ? CONFIG.THEME.dark : CONFIG.THEME.light;
 
-    return `
+  return `
     <!DOCTYPE html>
     <html lang="en" class="${isDark ? 'dark-theme' : 'light-theme'}">
     <head>
@@ -1756,62 +1801,62 @@ router.renderError = renderError;
 
 // API endpoints
 router.get('/api/sidebar', async (req, res) => {
-    try {
-        const sidebarBuilder = new SidebarBuilder();
-        const tree = await sidebarBuilder.buildTree(CONFIG.DOCS_ROOT);
-        res.json({ success: true, data: tree });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: 'Failed to load sidebar',
-            message: error.message
-        });
-    }
+  try {
+    const sidebarBuilder = new SidebarBuilder();
+    const tree = await sidebarBuilder.buildTree(CONFIG.DOCS_ROOT);
+    res.json({ success: true, data: tree });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to load sidebar',
+      message: error.message
+    });
+  }
 });
 
 router.get('/api/stats', async (req, res) => {
-    try {
-        const stats = {
-            totalFiles: 0,
-            totalDirs: 0,
-            cacheSize: cache.cache.size,
-            uptime: process.uptime()
-        };
+  try {
+    const stats = {
+      totalFiles: 0,
+      totalDirs: 0,
+      cacheSize: cache.cache.size,
+      uptime: process.uptime()
+    };
 
-        const countItems = async (dir) => {
-            const files = await fs.readdir(dir, { withFileTypes: true });
+    const countItems = async (dir) => {
+      const files = await fs.readdir(dir, { withFileTypes: true });
 
-            for (const file of files) {
-                if (file.isDirectory()) {
-                    stats.totalDirs++;
-                    await countItems(path.join(dir, file.name));
-                } else if (CONFIG.ALLOWED_EXTENSIONS.has(path.extname(file.name))) {
-                    stats.totalFiles++;
-                }
-            }
-        };
+      for (const file of files) {
+        if (file.isDirectory()) {
+          stats.totalDirs++;
+          await countItems(path.join(dir, file.name));
+        } else if (CONFIG.ALLOWED_EXTENSIONS.has(path.extname(file.name))) {
+          stats.totalFiles++;
+        }
+      }
+    };
 
-        await countItems(CONFIG.DOCS_ROOT);
-        res.json({ success: true, data: stats });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
+    await countItems(CONFIG.DOCS_ROOT);
+    res.json({ success: true, data: stats });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 router.post('/api/cache/clear', (req, res) => {
-    const auth = req.headers.authorization;
-    if (process.env.NODE_ENV === 'production' && auth !== `Bearer ${process.env.ADMIN_TOKEN}`) {
-        return res.status(401).json({ success: false, error: 'Unauthorized' });
-    }
+  const auth = req.headers.authorization;
+  if (process.env.NODE_ENV === 'production' && auth !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
 
-    const sizeBefore = cache.cache.size;
-    cache.clear();
+  const sizeBefore = cache.cache.size;
+  cache.clear();
 
-    res.json({
-        success: true,
-        message: 'Cache cleared successfully',
-        cleared: sizeBefore
-    });
+  res.json({
+    success: true,
+    message: 'Cache cleared successfully',
+    cleared: sizeBefore
+  });
 });
 
 export default router;
