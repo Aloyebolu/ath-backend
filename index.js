@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-app.use('/docs', docsRouter);
+app.use('/bridgegap/docs', docsRouter);
 
 app.get('/health', (req, res) => {
   res.send('OK');
